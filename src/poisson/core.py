@@ -72,16 +72,21 @@ class Poisson():
     def read_mask(self, mask_path):
         """Load mask image"""
         self.mask = self.__read_img_from_path(mask_path)
+        
         # Cast mask image as a 3 channel image
         # 3 channel is needed to handle mask read as 3 channel image
         self.mask = np.atleast_3d(self.mask).astype(np.float)
+
         # Normalize the mask image
         self.mask *= 1/255
+
         # Binarize the mask
         # Set the values that are not 1 to zero for sanitization
         self.mask[self.mask != 1] = 0
+
         # Trim 3 channels to 1 channel
         self.mask = self.mask[:,:,0]
+
         # Extract the indices from the mask
         self.masked_pixels = self.mask.nonzero()
         self.masked_pixels = zip(self.masked_pixels[0], self.masked_pixels[1])
@@ -98,17 +103,16 @@ class Poisson():
         """
         x, y = pixel
         return [
-            (x-1, y-1),
             (x-1, y),
             (x+1, y),
-            (x+1, y+1)
+            (x, y-1),
+            (x, y+1)
         ]
 
     def laplacian(self):
         """Evaluate the Laplacian matrix"""
-
         # Throw exception if called before loading mask
-        if not self.masked_pixels:
+        if not self.masked_pixels == None:
             raise AttributeError('Mask is not loaded')
 
         # Initialize the laplacian matrix
@@ -126,5 +130,76 @@ class Poisson():
                 try:
                     j = self.masked_pixels.index(npixel)
                     self.A[i][j] = -1
-                except ValueError as err:
+                except ValueError:
                     pass
+
+    def __apply_laplacian(self, pixel):
+        """Apply Laplcian on the given pixel
+
+        Args:
+            pixel: tuple containing the pixel coordinates
+
+        Returns:
+            result: Value of the pixel after applying Laplacian
+        """
+        x, y = pixel
+        result = 4 * self.source[i][j]
+        result -= self.source[i-1][j]
+        result -= self.source[i+1][j]
+        result -= self.source[i][j-1]
+        result -= self.source[i][j+1]
+        return result
+
+    self.__is_inside(self, pixel):
+        """Tells if a given point is inside the mask
+
+        Args:
+            pixel: tuple containing the pixel coordinates
+
+        Returns:
+            True if pixel is inside the mask, False otherwise
+        """
+        return self.mask[pixel] == 1
+
+    self.__is_edge(self, pixel):
+        """Tells if a given point is on an edge
+        
+        Args:
+            pixel: tuple containing the pixel coordinates
+
+        Returns:
+            True if pixel is on edge else False
+        """
+        # False if outside the mask
+        if not self.__is_inside(pixel):
+            return False
+        
+        # Check if neighbouring pixels are inside
+        # Current pixel is already a part of the mask
+        # If any of the nighbouring pixel is not inside, the current pixel
+        # should be outside
+        for npixel in self.neighbourhood(pixel):
+            if not self.__is_inside(pixel):
+                return True
+        
+        return False
+
+    def evaluate_RHS(self):
+        """Evaluate RHS of the Poisson equation"""
+        # Throw exception if called before lading mask
+        if not self.masked_pixels == None:
+            raise AttributeError('Mask is not loaded')
+        
+        # Initialize the matrix
+        self.B = np.zeros(len(self.masked_pixels))
+
+        # Evaluate RHS
+        for i, pixel in enumerate(self.masked_pixels):
+            # Get value after Laplacian
+            self.B[i] = self.__apply_laplacian(pixel)
+
+            # If the pixel is on the edge, add target intensity
+            if self.__is_edge(pixel):
+                for npixel in self.neighbourhood(pixel):
+                    self.B[i] += self.target[i]
+    
