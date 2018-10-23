@@ -14,6 +14,7 @@ import os
 # Import installed modules
 import numpy as np
 import cv2
+from numpy.linalg import lstsq as solver
 
 
 class Poisson():
@@ -203,3 +204,17 @@ class Poisson():
                 for npixel in self.neighbourhood(pixel):
                     self.B[i] += self.target[i]
     
+    def seamless_blend(self):
+        """Perform blending with given images
+        
+        Returns:
+            result: Output image after blending
+        """
+        u = solver(self.A, self.B)
+        result = np.copy(self.target).astype(int)
+        
+        # Replace with new intensities
+        for i, pixel in enumerate(self.masked_pixels):
+            result[pixel] = u[0][i]
+        
+        return result
