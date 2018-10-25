@@ -134,21 +134,22 @@ class Poisson():
                 except ValueError:
                     pass
 
-    def __apply_laplacian(self, pixel):
+    def __apply_laplacian(self, layer, pixel):
         """Apply Laplcian on the given pixel
 
         Args:
+            layer: One channel array from source image
             pixel: tuple containing the pixel coordinates
 
         Returns:
             result: Value of the pixel after applying Laplacian
         """
         x, y = pixel
-        result = 4 * self.source[i][j]
-        result -= self.source[i-1][j]
-        result -= self.source[i+1][j]
-        result -= self.source[i][j-1]
-        result -= self.source[i][j+1]
+        result = 4 * layer[i][j]
+        result -= layer[i-1][j]
+        result -= layer[i+1][j]
+        result -= layer[i][j-1]
+        result -= layer[i][j+1]
         return result
 
     self.__is_inside(self, pixel):
@@ -185,8 +186,13 @@ class Poisson():
         
         return False
 
-    def evaluate_RHS(self):
-        """Evaluate RHS of the Poisson equation"""
+    def evaluate_RHS(self, src_layer, target_layer):
+        """Evaluate RHS of the Poisson equation
+        
+        Args:
+            src_layer: One channel array from the source image
+            target_layer: One channel array from the target image
+        """
         # Throw exception if called before lading mask
         if not self.masked_pixels == None:
             raise AttributeError('Mask is not loaded')
@@ -197,12 +203,12 @@ class Poisson():
         # Evaluate RHS
         for i, pixel in enumerate(self.masked_pixels):
             # Get value after Laplacian
-            self.B[i] = self.__apply_laplacian(pixel)
+            self.B[i] = self.__apply_laplacian(src_layer, pixel)
 
             # If the pixel is on the edge, add target intensity
             if self.__is_edge(pixel):
                 for npixel in self.neighbourhood(pixel):
-                    self.B[i] += self.target[i]
+                    self.B[i] += target_layer[i]
     
     def seamless_blend(self):
         """Perform blending with given images
