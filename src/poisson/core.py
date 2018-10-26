@@ -13,8 +13,8 @@ import os
 
 # Import installed modules
 import numpy as np
-import cv2
 from numpy.linalg import lstsq as solver
+import cv2
 
 
 class Poisson():
@@ -73,7 +73,7 @@ class Poisson():
     def read_mask(self, mask_path):
         """Load mask image"""
         self.mask = self.__read_img_from_path(mask_path)
-        
+
         # Cast mask image as a 3 channel image
         # 3 channel is needed to handle mask read as 3 channel image
         self.mask = np.atleast_3d(self.mask).astype(np.float)
@@ -86,7 +86,7 @@ class Poisson():
         self.mask[self.mask != 1] = 0
 
         # Trim 3 channels to 1 channel
-        self.masked_pixels = self.mask[:,:,0]
+        self.masked_pixels = self.mask[:, :, 0]
 
         # Extract the indices from the mask
         self.masked_pixels = self.masked_pixels.nonzero()
@@ -144,7 +144,7 @@ class Poisson():
         Returns:
             result: Value of the pixel after applying Laplacian
         """
-        x, y = pixel
+        i, j = pixel
         result = 4 * layer[i][j]
         result -= layer[i-1][j]
         result -= layer[i+1][j]
@@ -152,7 +152,7 @@ class Poisson():
         result -= layer[i][j+1]
         return result
 
-    self.__is_inside(self, pixel):
+    def __is_inside(self, pixel):
         """Tells if a given point is inside the mask
 
         Args:
@@ -163,9 +163,9 @@ class Poisson():
         """
         return self.mask[pixel] == 1
 
-    self.__is_edge(self, pixel):
+    def __is_edge(self, pixel):
         """Tells if a given point is on an edge
-        
+
         Args:
             pixel: tuple containing the pixel coordinates
 
@@ -175,20 +175,20 @@ class Poisson():
         # False if outside the mask
         if not self.__is_inside(pixel):
             return False
-        
+
         # Check if neighbouring pixels are inside
         # Current pixel is already a part of the mask
         # If any of the nighbouring pixel is not inside, the current pixel
         # should be outside
         for npixel in self.neighbourhood(pixel):
-            if not self.__is_inside(pixel):
+            if not self.__is_inside(npixel):
                 return True
-        
+
         return False
 
     def evaluate_RHS(self, src_layer, target_layer):
         """Evaluate RHS of the Poisson equation
-        
+
         Args:
             src_layer: One channel array from the source image
             target_layer: One channel array from the target image
@@ -196,7 +196,7 @@ class Poisson():
         # Throw exception if called before lading mask
         if not self.masked_pixels == None:
             raise AttributeError('Mask is not loaded')
-        
+
         # Initialize the matrix
         self.B = np.zeros(len(self.masked_pixels))
 
@@ -208,18 +208,19 @@ class Poisson():
             # If the pixel is on the edge, add target intensity
             if self.__is_edge(pixel):
                 for npixel in self.neighbourhood(pixel):
-                    self.B[i] += target_layer[i]
+                    if not self.__is_inside(npixel):
+                        self.B[i] += target_layer[npixel]
 
     def __check_input_dimensions(self):
         """Check if input image dimensions are the same"""
         if self.mask.shape == self.source.shape == self.target.shape:
             return True
-        
+
         return False
-    
+
     def seamless_blend(self):
         """Perform blending with given images
-        
+
         Returns:
             result: Output image after blending
 
@@ -236,29 +237,28 @@ class Poisson():
         result = np.copy(self.target).astype(int)
 
         self.laplacian()
-        
 
         # Replace with new intensities
         if len(self.source.shape) == 2:
             self.evaluate_RHS(self.source, self.target)
-            
+
             # Solve the system of equations
             u = solver(self.A, self.B)
-            
+
             for i, pixel in enumerate(self.masked_pixels):
                 result[pixel] = u[0][i]
 
         else:
             for i in range(channels):
                 self.evaluate_RHS(self.source[:,:,i], self.target[:,:,i])
-                
+
                 # Solve the system of equations
                 u = solver(self.A, self.B)
                 tmp = np.copy(self.target[:,:,i]).astype(int)
 
                 for i, pixel in enumerate(self.masked_pixels):
                     tmp[pixel] = u[0][i]
-                
+
                 result[:,:,i] = tmp
 
         return result
