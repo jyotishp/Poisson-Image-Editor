@@ -86,10 +86,10 @@ class Poisson():
         self.mask[self.mask != 1] = 0
 
         # Trim 3 channels to 1 channel
-        self.mask = self.mask[:,:,0]
+        self.masked_pixels = self.mask[:,:,0]
 
         # Extract the indices from the mask
-        self.masked_pixels = self.mask.nonzero()
+        self.masked_pixels = self.masked_pixels.nonzero()
         self.masked_pixels = zip(self.masked_pixels[0], self.masked_pixels[1])
 
     def neighbourhood(self, pixel):
@@ -209,18 +209,56 @@ class Poisson():
             if self.__is_edge(pixel):
                 for npixel in self.neighbourhood(pixel):
                     self.B[i] += target_layer[i]
+
+    def __check_input_dimensions(self):
+        """Check if input image dimensions are the same"""
+        if self.mask.shape == self.source.shape == self.target.shape:
+            return True
+        
+        return False
     
     def seamless_blend(self):
         """Perform blending with given images
         
         Returns:
             result: Output image after blending
+
+        Raises:
+            ValueError: Throw exception if input images are not of
+                same dimensions
         """
-        u = solver(self.A, self.B)
+        # Throw error if the input dimensions are not same
+        if not self.__check_input_dimensions():
+            raise ValueError('Input dimensions of all images should be same')
+
+        # Get number of channels
+        channels = self.source.shape[-1]
         result = np.copy(self.target).astype(int)
+
+        self.laplacian()
         
+
         # Replace with new intensities
-        for i, pixel in enumerate(self.masked_pixels):
-            result[pixel] = u[0][i]
-        
+        if len(self.source.shape) == 2:
+            self.evaluate_RHS(self.source, self.target)
+            
+            # Solve the system of equations
+            u = solver(self.A, self.B)
+            
+            for i, pixel in enumerate(self.masked_pixels):
+                result[pixel] = u[0][i]
+
+        else:
+            for i in range(channels):
+                self.evaluate_RHS(self.source[:,:,i], self.target[:,:,i])
+                
+                # Solve the system of equations
+                u = solver(self.A, self.B)
+                tmp = np.copy(self.target[:,:,i]).astype(int)
+
+                for i, pixel in enumerate(self.masked_pixels):
+                    tmp[pixel] = u[0][i]
+                
+                result[:,:,i] = tmp
+
         return result
