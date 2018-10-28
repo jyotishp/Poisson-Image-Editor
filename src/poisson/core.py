@@ -13,8 +13,10 @@ import os
 
 # Import installed modules
 import numpy as np
-from numpy.linalg import lstsq as solver
+# from numpy.linalg import lstsq as solver
+from scipy.sparse.linalg import cg as solver
 import cv2
+from scipy import sparse
 
 
 class Poisson():
@@ -60,7 +62,7 @@ class Poisson():
             raise IOError('No file named ' + path)
 
         # Return loaded image
-        return cv2.imread(path)
+        return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
 
     def read_source(self, src_path):
         """Load source/foreground image"""
@@ -86,11 +88,18 @@ class Poisson():
         self.mask[self.mask != 1] = 0
 
         # Trim 3 channels to 1 channel
-        self.masked_pixels = self.mask[:, :, 0]
+        self.mask_shape = self.mask.shape
+        self.mask = self.mask[:, :, 0]
 
         # Extract the indices from the mask
-        self.masked_pixels = self.masked_pixels.nonzero()
-        self.masked_pixels = zip(self.masked_pixels[0], self.masked_pixels[1])
+        self.masked_pixels = self.mask.nonzero()
+        tmp = zip(self.masked_pixels[0], self.masked_pixels[1])
+        
+        # Convert zip to list
+        # Python 3 doesn't support len() on finite generators
+        self.masked_pixels = []
+        for pixel in tmp:
+            self.masked_pixels.append(pixel)
 
     def neighbourhood(self, pixel):
         """Get neighbouring four pixel locations for a given pixel location
@@ -113,7 +122,7 @@ class Poisson():
     def laplacian(self):
         """Evaluate the Laplacian matrix"""
         # Throw exception if called before loading mask
-        if not self.masked_pixels == None:
+        if self.masked_pixels == None:
             raise AttributeError('Mask is not loaded')
 
         # Initialize the laplacian matrix
@@ -133,6 +142,7 @@ class Poisson():
                     self.A[i][j] = -1
                 except ValueError:
                     pass
+        self.A = sparse.csr_matrix(self.A)
 
     def __apply_laplacian(self, layer, pixel):
         """Apply Laplcian on the given pixel
@@ -194,7 +204,7 @@ class Poisson():
             target_layer: One channel array from the target image
         """
         # Throw exception if called before lading mask
-        if not self.masked_pixels == None:
+        if self.masked_pixels == None:
             raise AttributeError('Mask is not loaded')
 
         # Initialize the matrix
@@ -213,7 +223,7 @@ class Poisson():
 
     def __check_input_dimensions(self):
         """Check if input image dimensions are the same"""
-        if self.mask.shape == self.source.shape == self.target.shape:
+        if self.mask_shape == self.source.shape == self.target.shape:
             return True
 
         return False
@@ -253,11 +263,13 @@ class Poisson():
                 self.evaluate_RHS(self.source[:,:,i], self.target[:,:,i])
 
                 # Solve the system of equations
-                u = solver(self.A, self.B)
+                u = solver(self.A, self.B)[0].round()
+                self.debug = u
                 tmp = np.copy(self.target[:,:,i]).astype(int)
+                self.debug2 = tmp
 
-                for i, pixel in enumerate(self.masked_pixels):
-                    tmp[pixel] = u[0][i]
+                for j, pixel in enumerate(self.masked_pixels):
+                    tmp[pixel] = u[j]
 
                 result[:,:,i] = tmp
 
