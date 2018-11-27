@@ -5,6 +5,7 @@
 #!/usr/env/bin python
 
 import numpy as np
+import time
 
 def direct_patch(src, mask, target):
     for i in range(target.shape[0]):

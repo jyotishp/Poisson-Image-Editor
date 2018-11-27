@@ -1,2 +1,3 @@
 src/.ipynb_checkpoints/*
 src/poisson/__pycache__/*
+test_data/*

@@ -161,6 +161,29 @@ class Poisson():
         result -= layer[i][j-1]
         result -= layer[i][j+1]
         return result
+    
+    def __apply_gradient(self, layer, pixel):
+        """Apply gradient on the given pixel
+        
+        Args:
+            layer: One channel array from source image
+            pixel: Tuple containing the pixel coordinates
+        
+        Returns:
+            result: Value of the pixel after differentiation
+        """
+        i, j = pixel
+#         if i < 1: i = 1
+#         if i > layer.shape[0]-2: i = layer.shape[0]-2
+#         if j < 1: j = 1
+#         if j > layer.shape[1]-2: j = layer.shape[1]-2
+#         x_res = -float(layer[i-1][j]) + float(layer[i+1][j])
+#         y_res = -float(layer[i][j-1]) + float(layer[i][j+1])
+#         print(pixel, layer[pixel], x_res, y_res)
+        x_res = float(layer[i][j]) - float(layer[i-1][j])
+        y_res = float(layer[i][j]) - float(layer[i][j-1])
+        result = (x_res + y_res)/2
+        return result
 
     def __is_inside(self, pixel):
         """Tells if a given point is inside the mask
@@ -196,7 +219,7 @@ class Poisson():
 
         return False
 
-    def evaluate_RHS(self, src_layer, target_layer):
+    def evaluate_RHS(self, src_layer, target_layer, mixed=False):
         """Evaluate RHS of the Poisson equation
 
         Args:
@@ -214,6 +237,13 @@ class Poisson():
         for i, pixel in enumerate(self.masked_pixels):
             # Get value after Laplacian
             self.B[i] = self.__apply_laplacian(src_layer, pixel)
+            
+            # Mixed gradients
+            if mixed:
+                target_gradient = self.__apply_gradient(target_layer, pixel)
+#                 print(self.B[i], target_gradient)
+                if abs(target_gradient) > abs(self.B[i]):
+                    self.B[i] = target_gradient
 
             # If the pixel is on the edge, add target intensity
             if self.__is_edge(pixel):
@@ -228,7 +258,7 @@ class Poisson():
 
         return False
 
-    def seamless_blend(self):
+    def seamless_blend(self, mixed=False):
         """Perform blending with given images
 
         Returns:
@@ -260,7 +290,7 @@ class Poisson():
 
         else:
             for i in range(channels):
-                self.evaluate_RHS(self.source[:,:,i], self.target[:,:,i])
+                self.evaluate_RHS(self.source[:,:,i], self.target[:,:,i], mixed)
 
                 # Solve the system of equations
                 u = solver(self.A, self.B)[0].round()
